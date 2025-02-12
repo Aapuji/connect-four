@@ -1,7 +1,4 @@
-use std::{
-    io::{self, BufWriter, Write},
-    ops,
-};
+use std::io::{self, BufWriter, Write};
 
 use crate::piece::{Piece, PieceDef};
 
@@ -20,7 +17,7 @@ impl Board {
             width: width.clamp(1, 20),
             height: height.clamp(1, 20),
             pieces: vec![vec![Piece::Empty; width]; height],
-            selector: Selector::new(0),
+            selector: Selector::new(1, width - 1),
         }
     }
 
@@ -34,7 +31,7 @@ impl Board {
         piece_def: PieceDef,
     ) -> io::Result<()> {
         // Selector line
-        self.selector.write(writer, player, piece_def, self.width)?;
+        self.selector.write(writer, player, piece_def)?;
 
         // Board items
         for i in 0..self.height {
@@ -57,11 +54,11 @@ impl Board {
     }
 
     pub fn selector_shl(&mut self) {
-        self.selector.shl(0);
+        self.selector.shl();
     }
 
     pub fn selector_shr(&mut self) {
-        self.selector.shr(self.width - 1);
+        self.selector.shr();
     }
 
     pub fn selector_reset(&mut self) {
@@ -81,25 +78,24 @@ impl Board {
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Selector {
     pos: usize,
+    max: usize,
 }
 
 impl Selector {
-    pub fn new(pos: usize) -> Self {
-        Self { pos }
+    /// Creates a new `Selector`. The `max` is the maximum possible column value that the sleector
+    /// can have.
+    pub fn new(pos: usize, max: usize) -> Self {
+        Self { pos, max }
     }
 
-    /// Shifts the selector left, stopping at `min`, which should be the smallest column value that
-    /// the selector could have.
-    pub fn shl(&mut self, min: usize) {
-        self.pos = self.pos.max(min + 1) - 1;
+    /// Shifts the selector left.
+    pub fn shl(&mut self) {
+        self.pos = self.pos.max(1) - 1;
     }
 
-    /// Shifts the selector right, stopping at `max`, which should be the biggest column value that
-    /// the selector could have.
-    ///
-    /// Note: This means you will pass in `width - 1`.
-    pub fn shr(&mut self, max: usize) {
-        self.pos = self.pos.min(max - 1) + 1;
+    /// Shifts the selector right.
+    pub fn shr(&mut self) {
+        self.pos = self.pos.min(self.max - 1) + 1;
     }
 
     pub fn write<W: Write>(
@@ -107,19 +103,18 @@ impl Selector {
         writer: &mut BufWriter<W>,
         player: Piece,
         piece_def: PieceDef,
-        width: usize,
     ) -> io::Result<()> {
-        for j in 0..width {
+        for j in 0..=self.max {
             if j == self.pos {
-                writer.write(b" (")?;
+                writer.write("\x1b[38;2;65;72;104m\u{2039}\x1b[m(".as_bytes())?;
                 player.write(writer, piece_def)?;
-                writer.write(b")")?;
+                writer.write(")\x1b[38;2;65;72;104m\u{203a}\x1b[m".as_bytes())?;
             } else {
                 writer.write(b"    ")?;
             }
         }
 
-        writer.write(b" \n")?;
+        writer.write(b"\n")?;
 
         Ok(())
     }
