@@ -1,12 +1,12 @@
 use std::io::{self, BufWriter, Write};
 
-use crate::piece::{Piece, PieceDef};
+use crate::piece::{Cell, Piece, PieceDef};
 
 #[derive(Debug, Clone)]
 pub struct Board {
     width: usize,
     height: usize,
-    pieces: Vec<Vec<Piece>>,
+    cells: Vec<Vec<Cell>>,
     selector: Selector,
 }
 
@@ -16,7 +16,7 @@ impl Board {
         Self {
             width: width.clamp(1, 20),
             height: height.clamp(1, 20),
-            pieces: vec![vec![Piece::Empty; width]; height],
+            cells: vec![vec![Cell(None); width]; height],
             selector: Selector::new(1, width - 1),
         }
     }
@@ -37,7 +37,7 @@ impl Board {
         for i in 0..self.height {
             for j in 0..self.width {
                 writer.write(b"| ")?;
-                self.pieces[i][j].write(writer, piece_def)?;
+                self.cells[i][j].write(writer, piece_def)?;
                 writer.write(b" ")?;
             }
 
@@ -49,6 +49,26 @@ impl Board {
             writer.write(b"+---")?;
         }
         writer.write(b"+")?;
+
+        Ok(())
+    }
+
+    /// Resets cursor back to start, allowing for it to overwrite the previous board.
+    pub fn reset_board<W: Write>(&self, writer: &mut BufWriter<W>) -> io::Result<()> {
+        writer.write(format!("\x1b[{}A", self.get_entire_height()).as_bytes())?;
+
+        Ok(())
+    }
+
+    /// Drops the given piece at the selector index.
+    pub fn drop_piece(&mut self, piece: Piece) -> io::Result<()> {
+        let mut y = self.height;
+
+        while y > 0 && self.cells[self.height - y][self.selector.pos].is_empty() {
+            y -= 1;
+        }
+
+        self.cells[self.height - y - 1][self.selector.pos].0 = Some(piece);
 
         Ok(())
     }
@@ -71,6 +91,12 @@ impl Board {
 
     pub fn height(&self) -> usize {
         self.height
+    }
+
+    /// Gets the "entire" height, including any extra new lines or other lines that are written
+    /// around the board.
+    pub fn get_entire_height(&self) -> usize {
+        self.height + 3
     }
 }
 
